@@ -34,7 +34,69 @@ Two capabilities, one system:
 
 ## 🏗️ Architecture
 
-![Architecture](assets/architecture.png)
+### System Architecture
+
+```mermaid
+flowchart TD
+    UI["🖥️ Streamlit UI<br/><i>Chat + Analyzer tabs</i>"]
+    RAG["🔍 RAG Chain<br/><i>Q&A with citations</i>"]
+    AGENT["🤖 LangGraph Agent<br/><i>Coverage gap analyzer</i>"]
+    DB[("🗄️ ChromaDB<br/><i>Vector store + MMR</i>")]
+    LLM["🧠 Claude Sonnet 4.5<br/><i>LLM synthesis</i>"]
+    OUT["📄 Grounded Output<br/><i>Answer or stimulus</i>"]
+
+    UI --> RAG
+    UI --> AGENT
+    RAG --> DB
+    RAG --> LLM
+    AGENT --> DB
+    AGENT --> LLM
+    DB -.context.-> LLM
+    LLM --> OUT
+
+    classDef ui fill:#EEEDFE,stroke:#534AB7,color:#26215C
+    classDef logic fill:#E1F5EE,stroke:#0F6E56,color:#04342C
+    classDef data fill:#F1EFE8,stroke:#5F5E5A,color:#2C2C2A
+    classDef llm fill:#FAEEDA,stroke:#854F0B,color:#412402
+    classDef out fill:#F1EFE8,stroke:#5F5E5A,color:#2C2C2A
+
+    class UI ui
+    class RAG,AGENT logic
+    class DB data
+    class LLM llm
+    class OUT out
+```
+
+### Coverage Analyzer Agent (LangGraph)
+
+```mermaid
+flowchart TD
+    INPUT[/"📊 Coverage Report<br/>(uncovered bins listed)"/]
+    PARSE["🔎 Parse Coverage<br/><i>LLM extracts gaps</i>"]
+    RETRIEVE["📚 Retrieve Spec<br/><i>MMR over ChromaDB</i>"]
+    SUGGEST["✏️ Suggest Stimulus<br/><i>Generate UVM sequence</i>"]
+    DECIDE{"More gaps<br/>to process?"}
+    ASSEMBLE["📄 Assemble Report<br/><i>Markdown with citations</i>"]
+    OUTPUT[/"✅ coverage_analysis.md"/]
+
+    INPUT --> PARSE
+    PARSE --> RETRIEVE
+    RETRIEVE --> SUGGEST
+    SUGGEST --> DECIDE
+    DECIDE -- Yes --> RETRIEVE
+    DECIDE -- No --> ASSEMBLE
+    ASSEMBLE --> OUTPUT
+
+    classDef io fill:#F1EFE8,stroke:#5F5E5A,color:#2C2C2A
+    classDef node fill:#EEEDFE,stroke:#534AB7,color:#26215C
+    classDef decide fill:#FAEEDA,stroke:#854F0B,color:#412402
+
+    class INPUT,OUTPUT,ASSEMBLE io
+    class PARSE,RETRIEVE,SUGGEST node
+    class DECIDE decide
+```
+
+The agent is implemented as a stateful `StateGraph` — the loop between `Retrieve` and `Suggest` runs once per identified coverage gap, with conditional branching back via `add_conditional_edges`.
 
 ### RAG Pipeline
 ```
