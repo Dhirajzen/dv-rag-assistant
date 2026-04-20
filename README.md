@@ -24,7 +24,7 @@ Two capabilities, one system:
 
 ## 🎬 Demo
 
-> _Add screenshots in `assets/` and reference them here._
+
 
 | Spec Q&A | Coverage Analyzer |
 |----------|-------------------|
