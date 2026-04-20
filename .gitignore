@@ -1,0 +1,9 @@
+venv/
+.env
+__pycache__/
+chroma_db/
+data/*.pdf
+*.pyc
+.DS_Store
+.streamlit/secrets.toml
+coverage_analysis_output.md

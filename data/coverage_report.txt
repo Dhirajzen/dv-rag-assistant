@@ -1,0 +1,22 @@
+=================================================
+AXI4 Verification Coverage Report
+DUT: axi4_lite_slave
+=================================================
+
+COVERED BINS:
+  cp_write_addr.aligned_4byte         : HIT (count=152)
+  cp_write_addr.aligned_8byte         : HIT (count=87)
+  cp_read_addr.aligned_4byte          : HIT (count=143)
+  cp_response.OKAY                    : HIT (count=298)
+  cp_burst_type.INCR                  : HIT (count=412)
+
+UNCOVERED BINS:
+  cp_write_addr.unaligned             : MISS  (description: unaligned write addresses)
+  cp_response.SLVERR                  : MISS  (description: slave error response)
+  cp_response.DECERR                  : MISS  (description: decode error response)
+  cp_burst_type.WRAP                  : MISS  (description: wrapping burst transfer)
+  cp_concurrent.write_during_read     : MISS  (description: concurrent write+read)
+  cp_handshake.valid_before_ready     : MISS  (description: VALID asserted before READY)
+
+OVERALL COVERAGE: 64.7%
+=================================================
