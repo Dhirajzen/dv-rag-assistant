@@ -188,7 +188,7 @@ This loads the PDF, cleans it, chunks it, embeds it, and persists to `chroma_db/
 
 ### 5. Run the app
 ```bash
-streamlit run app.py
+python -m streamlit run app.py
 ```
 
 Or run from the CLI:
