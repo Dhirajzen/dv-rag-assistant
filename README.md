@@ -190,7 +190,6 @@ This loads the PDF, cleans it, chunks it, embeds it, and persists to `chroma_db/
 ```bash
 streamlit run app.py
 ```
-Opens at [http://localhost:8501](http://localhost:8501).
 
 Or run from the CLI:
 ```bash
