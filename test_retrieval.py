@@ -1,21 +1,15 @@
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
+"""Inspect retrieval quality for one spec.
 
-CHROMA_DIR = "chroma_db"
-EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+    python test_retrieval.py "AXI4" "Explain the handshake mechanism"
+"""
+import sys
 
-embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
-vectorstore = Chroma(
-    persist_directory=CHROMA_DIR,
-    embedding_function=embeddings
-)
+from specs import get_vectorstore, resolve_spec
 
-query = "Explain the AXI handshake mechanism"
-results = vectorstore.similarity_search(query, k=3)
+spec = resolve_spec(sys.argv[1] if len(sys.argv) > 1 else None)
+query = sys.argv[2] if len(sys.argv) > 2 else "Give an overview of the main interface signals"
 
-print(f"\nQuery: {query}\n")
-print("=" * 60)
-for i, doc in enumerate(results, 1):
+print(f"\nSpec: {spec['name']}\nQuery: {query}\n" + "=" * 60)
+for i, doc in enumerate(get_vectorstore(spec["id"]).similarity_search(query, k=3), 1):
     print(f"\n--- Result {i} (page {doc.metadata.get('page', '?')}) ---")
-    print(doc.page_content[:400])
-    print("...")
+    print(doc.page_content[:400] + "...")
