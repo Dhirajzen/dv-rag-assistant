@@ -1,9 +1,11 @@
 # Data Directory
 
-Place the AXI4 specification PDF here as `axi4_spec.pdf`.
+Specification PDFs are not committed (most are licensed). Add any spec either way:
 
-Download from ARM Developer (free with signup):
-- Document: AMBA AXI Protocol Specification (IHI 0022H or later)
-- URL: https://developer.arm.com/documentation/ihi0022/
+- **UI**: sidebar → *Add a spec* → upload the PDF and give it a name.
+- **CLI**: `python ingest.py path/to/spec.pdf --name "APB4"`
 
-After placing the PDF here, run `python ingest.py` to build the vector database.
+Example: the AMBA AXI Protocol Specification (IHI 0022) is a free download from
+[ARM Developer](https://developer.arm.com/documentation/ihi0022/).
+
+`coverage_report.txt` is a sample AXI4 functional coverage report for the Coverage Analyzer.

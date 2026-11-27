@@ -1,69 +1,58 @@
+"""CLI for the spec library.
+
+    python ingest.py data/axi4_spec.pdf --name "AXI4"
+    python ingest.py --list
+    python ingest.py --delete "AXI4"
+"""
+import argparse
 import os
-import re
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
+import sys
 
-# --- Config ---
-PDF_PATH = "data/axi4_spec.pdf"
-CHROMA_DIR = "chroma_db"
-EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+from specs import delete_spec, ingest_pdf, list_specs, resolve_spec
 
-def clean_page_text(text):
-    """Strip recurring ARM copyright headers and page numbers."""
-    # Remove ARM copyright lines
-    text = re.sub(r"ARM IHI 0022H.*?Non-Confidential", "", text, flags=re.DOTALL)
-    text = re.sub(r"Copyright © 2003-2020 Arm Limited.*?reserved\.", "", text)
-    text = re.sub(r"ID\d{6}", "", text)
-    # Collapse excessive whitespace
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    text = re.sub(r" {2,}", " ", text)
-    return text.strip()
 
 def main():
-    # 1. Load the PDF
-    print(f"Loading {PDF_PATH}...")
-    loader = PyPDFLoader(PDF_PATH)
-    documents = loader.load()
-    print(f"Loaded {len(documents)} pages")
+    parser = argparse.ArgumentParser(description="Ingest a specification PDF into the spec library.")
+    parser.add_argument("pdf", nargs="?", help="Path to the spec PDF")
+    parser.add_argument("--name", help="Display name for the spec (default: PDF file name)")
+    parser.add_argument("--skip-pages", type=int, default=0,
+                        help="Force-skip the first N pages (TOC pages are already auto-skipped)")
+    parser.add_argument("--list", action="store_true", help="List ingested specs")
+    parser.add_argument("--delete", metavar="NAME", help="Remove a spec from the library")
+    args = parser.parse_args()
 
- 
-    for doc in documents:
-        doc.page_content = clean_page_text(doc.page_content)
+    if args.list:
+        specs = list_specs()
+        if not specs:
+            print("No specs ingested yet.")
+        for s in specs:
+            print(f"{s['name']:<30} {s['pages']:>5} pages  {s['chunks']:>6} chunks  ({s['source_file']})")
+        return
 
-    # Drop pages that became basically empty after cleaning
-    documents = [d for d in documents if len(d.page_content) > 100]
-    print(f"After cleaning: {len(documents)} pages with meaningful content")
+    if args.delete:
+        spec = resolve_spec(args.delete)
+        delete_spec(spec["id"])
+        print(f"✓ Removed '{spec['name']}'")
+        return
 
-    # 1b. Skip front matter (TOC, intro) — adjust based on your spec
-    SKIP_FIRST_N_PAGES = 25  # ARM AXI spec front matter ends around page 28-30
-    documents = [d for d in documents if d.metadata.get("page", 0) >= SKIP_FIRST_N_PAGES]
-    print(f"After skipping front matter: {len(documents)} pages")
+    if not args.pdf:
+        parser.error("provide a PDF path, or use --list / --delete")
+    if not os.path.isfile(args.pdf):
+        sys.exit(f"File not found: {args.pdf}")
 
-    # 2. Split into chunks
-    print("Splitting into chunks...")
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1500,      # was 1000
-        chunk_overlap=300,    # was 200
-        separators=["\n\n", "\n", ". ", " ", ""]
-    )
-    chunks = splitter.split_documents(documents)
-    print(f"Created {len(chunks)} chunks")
+    name = args.name or os.path.splitext(os.path.basename(args.pdf))[0].replace("_", " ")
+    last = {"msg": None}
 
-    # 3. Create embeddings (runs locally, no API call)
-    print(f"Loading embedding model: {EMBEDDING_MODEL}")
-    embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+    def progress(frac, msg):
+        if msg != last["msg"]:
+            print(f"  [{frac:>4.0%}] {msg}", end="\r" if msg.startswith("Embedding") else "\n")
+            last["msg"] = msg
 
-    # 4. Build & persist the vector database
-    print("Building vector database (this may take a few minutes)...")
-    vectorstore = Chroma.from_documents(
-        documents=chunks,
-        embedding=embeddings,
-        persist_directory=CHROMA_DIR
-    )
-    print(f"✓ Vector DB saved to {CHROMA_DIR}")
-    print(f"✓ Indexed {vectorstore._collection.count()} chunks")
+    print(f"Ingesting {args.pdf} as '{name}'...")
+    spec = ingest_pdf(args.pdf, name, skip_first_pages=args.skip_pages, progress=progress)
+    print(f"\n✓ '{spec['name']}': indexed {spec['pages_indexed']}/{spec['pages']} pages "
+          f"into {spec['chunks']} chunks")
+
 
 if __name__ == "__main__":
     main()

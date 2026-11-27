@@ -1,13 +1,13 @@
 # 🔧 DV RAG Assistant
 
-> An LLM-powered verification assistant for the AXI4 protocol.
-> Ask the spec questions in plain English, or upload a coverage report and let an agent suggest UVM stimulus to close the gaps.
+> An LLM-powered verification assistant for **any specification** — AXI, APB, PCIe, RISC-V, your own block spec.
+> Upload the PDF, ask it questions in plain English, or upload a coverage report and let an agent suggest UVM stimulus to close the gaps.
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![LangChain](https://img.shields.io/badge/LangChain-1.x-green)](https://www.langchain.com/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-Agent-orange)](https://langchain-ai.github.io/langgraph/)
 [![Streamlit](https://img.shields.io/badge/UI-Streamlit-red?logo=streamlit&logoColor=white)](https://streamlit.io/)
-[![Claude](https://img.shields.io/badge/LLM-Claude%20Sonnet%204.5-purple)](https://www.anthropic.com/)
+[![Claude](https://img.shields.io/badge/LLM-Claude%20Sonnet-purple)](https://www.anthropic.com/)
 
 ---
 
@@ -15,10 +15,13 @@
 
 Modern Design Verification (DV) engineers spend hours hunting through 500-page protocol specifications and analyzing coverage reports for missed scenarios. **This project automates both.**
 
-Two capabilities, one system:
+Three capabilities, one system:
 
-1. **Spec Q&A** — Conversational RAG (Retrieval-Augmented Generation) over the ARM AXI4 specification. Ask any question, get answers grounded in the actual spec with page citations.
-2. **Coverage Gap Analyzer** — A LangGraph agent that parses functional coverage reports, identifies uncovered bins, retrieves relevant spec context for each gap, and suggests concrete UVM constrained-random stimulus to close them.
+1. **Spec Library** — Upload any specification PDF from the sidebar. Each spec is cleaned, chunked, embedded and stored in its own vector collection; switch between specs from a dropdown.
+2. **Spec Q&A** — Conversational RAG (Retrieval-Augmented Generation) over the selected spec. Ask any question, get answers grounded in the actual spec with page citations.
+3. **Coverage Gap Analyzer** — A LangGraph agent that parses functional coverage reports, identifies uncovered bins, retrieves relevant context from the selected spec for each gap, and suggests concrete UVM constrained-random stimulus to close them.
+
+It started as an AXI4-only tool; nothing in the pipeline is AXI-specific any more.
 
 ---
 
@@ -38,11 +41,11 @@ Two capabilities, one system:
 
 ```mermaid
 flowchart TD
-    UI["🖥️ Streamlit UI<br/><i>Chat + Analyzer tabs</i>"]
+    UI["🖥️ Streamlit UI<br/><i>Spec library + Chat + Analyzer</i>"]
     RAG["🔍 RAG Chain<br/><i>Q&A with citations</i>"]
     AGENT["🤖 LangGraph Agent<br/><i>Coverage gap analyzer</i>"]
-    DB[("🗄️ ChromaDB<br/><i>Vector store + MMR</i>")]
-    LLM["🧠 Claude Sonnet 4.5<br/><i>LLM synthesis</i>"]
+    DB[("🗄️ ChromaDB<br/><i>One collection per spec + MMR</i>")]
+    LLM["🧠 Claude Sonnet<br/><i>LLM synthesis</i>"]
     OUT["📄 Grounded Output<br/><i>Answer or stimulus</i>"]
 
     UI --> RAG
@@ -100,18 +103,18 @@ The agent is implemented as a stateful `StateGraph` — the loop between `Retrie
 
 ### RAG Pipeline
 ```
-PDF (500 pages)
-   ↓ PyPDFLoader + custom regex preprocessing
-Cleaned pages (boilerplate stripped, front matter dropped)
+Any spec PDF (upload in UI or `python ingest.py`)
+   ↓ PyPDFLoader + automatic header/footer and contents-page detection
+Cleaned pages (boilerplate stripped, TOC dropped)
    ↓ RecursiveCharacterTextSplitter (1500 chars, 300 overlap)
-Semantic chunks (~865 chunks)
+Semantic chunks (AXI4: ~780 chunks from 500 pages)
    ↓ HuggingFace all-MiniLM-L6-v2 (local embedding)
 384-dim vectors
-   ↓ ChromaDB (persistent on-disk)
-Searchable vector store
+   ↓ ChromaDB (persistent on-disk, one collection per spec)
+Searchable spec library
    ↓ MMR retrieval (k=10, fetch_k=25, λ=0.5)
 Diversified context
-   ↓ Claude Sonnet 4.5 + grounded prompt
+   ↓ Claude Sonnet + grounded prompt (chunks tagged with page numbers)
 Answer with page citations
 ```
 
@@ -138,12 +141,12 @@ The agent is implemented as a stateful `StateGraph` with conditional edges — a
 
 | Layer | Tool |
 |-------|------|
-| LLM | Anthropic Claude Sonnet 4.5 |
+| LLM | Anthropic Claude Sonnet (`claude-sonnet-5-5`; override with `LLM_MODEL` in `.env`) |
 | RAG framework | LangChain 1.x |
 | Agent framework | LangGraph |
 | Vector DB | ChromaDB (persistent) |
 | Embeddings | sentence-transformers `all-MiniLM-L6-v2` (local, free) |
-| PDF parsing | PyPDF + custom regex preprocessing |
+| PDF parsing | PyPDF + spec-agnostic boilerplate/TOC detection |
 | UI | Streamlit |
 | Language | Python 3.11+ |
 
@@ -174,27 +177,24 @@ ANTHROPIC_API_KEY=sk-ant-your-key-here
 ```
 Get a key at [console.anthropic.com](https://console.anthropic.com).
 
-### 3. Add the AXI4 spec
-Download the AMBA AXI Protocol Specification (free with signup) from [ARM Developer](https://developer.arm.com/documentation/ihi0022/) and save as:
-```
-data/axi4_spec.pdf
-```
-
-### 4. Build the vector database
-```bash
-python ingest.py
-```
-This loads the PDF, cleans it, chunks it, embeds it, and persists to `chroma_db/`. Takes ~3 minutes.
-
-### 5. Run the app
+### 3. Run the app
 ```bash
 python -m streamlit run app.py
 ```
 
-Or run from the CLI:
+### 4. Add a spec
+In the sidebar open **➕ Add a spec**, upload any specification PDF, give it a name, and click **Ingest spec**. It is cleaned, chunked, embedded and added to the library (a 500-page spec takes well under a minute). Add as many specs as you like and switch between them with the **Active spec** dropdown.
+
+For example, the AMBA AXI Protocol Specification is a free download from [ARM Developer](https://developer.arm.com/documentation/ihi0022/).
+
+### CLI alternative
 ```bash
-python rag.py     # interactive Spec Q&A
-python agent.py   # run coverage gap analyzer
+python ingest.py data/axi4_spec.pdf --name "AXI4"   # add a spec
+python ingest.py --list                              # show the library
+python ingest.py --delete "AXI4"                     # remove a spec
+
+python rag.py "AXI4"                                 # interactive Spec Q&A
+python agent.py "AXI4" data/coverage_report.txt      # run coverage gap analyzer
 ```
 
 ---
@@ -203,18 +203,18 @@ python agent.py   # run coverage gap analyzer
 
 ```
 dv-rag-assistant/
-├── app.py                # Streamlit UI (Q&A + coverage analyzer tabs)
-├── ingest.py             # PDF → chunks → embeddings → ChromaDB
-├── rag.py                # RAG retrieval chain with MMR + grounded prompts
+├── app.py                # Streamlit UI (spec library sidebar + Q&A + coverage analyzer tabs)
+├── specs.py              # Spec library: PDF cleaning, chunking, embedding, one collection per spec
+├── ingest.py             # CLI for the spec library (add / list / delete)
+├── rag.py                # MMR retrieval + grounded prompt with page citations
 ├── agent.py              # LangGraph agent for coverage gap analysis
 ├── test_llm.py           # Sanity check for API connectivity
 ├── test_retrieval.py     # Inspect retrieval quality
 ├── requirements.txt
 ├── .env                  # (not committed) API key
 ├── data/
-│   ├── axi4_spec.pdf     # (not committed) ARM AXI4 spec
-│   └── coverage_report.txt   # sample functional coverage report
-├── chroma_db/            # (not committed) vector DB, generated by ingest.py
+│   └── coverage_report.txt   # sample (AXI4) functional coverage report
+├── chroma_db/            # (not committed) vector DB, one collection per ingested spec
 └── README.md
 ```
 
@@ -226,11 +226,11 @@ A short post-mortem of the non-obvious problems hit while building this — the 
 
 ### Problem 1: Table of contents was outranking real content
 **Symptom:** Asking "Describe the AXI handshake protocol" returned chunks from the TOC ("Chapter A3 describes the basic AXI protocol transaction requirements...") because TOC entries were lexically similar to natural-language queries.
-**Fix:** Skip first ~30 pages of front matter during ingestion.
+**Fix:** Originally a hardcoded "skip the first N pages". Now spec-agnostic: any page that is mostly dot-leader lines ending in a page reference is detected as a contents page and dropped.
 
 ### Problem 2: Page headers/footers polluting chunks
 **Symptom:** Top retrieved chunks were mostly "ARM IHI 0022H Copyright © 2003-2020..." boilerplate.
-**Fix:** Custom regex preprocessing to strip recurring copyright lines and page numbers before chunking. Drop chunks that became <100 chars after cleaning.
+**Fix:** Originally ARM-specific regexes. Now spec-agnostic: lines that recur at the top/bottom of many pages (with digits normalised, so page numbers don't hide them) are detected as running headers/footers and stripped before chunking.
 
 ### Problem 3: Top-k retrieval returning near-duplicate chunks
 **Symptom:** Asking about AXI4-Lite handshake returned 8 chunks all from pages 118-122, missing the foundational handshake description in Chapter A3.
@@ -246,9 +246,9 @@ These four are the canonical RAG challenges that every production system has to 
 
 ## 🔮 Future Work
 
-- Migrate from legacy `RetrievalQA` to LangChain LCEL chains
 - Add reranking with `cohere` or cross-encoder models for higher-precision retrieval
-- Support multiple specs (APB, AHB, AXI5) with a multi-collection vector store
+- Query across several specs at once (e.g. AXI + your block spec)
+- Non-PDF specs (Word, Markdown, HTML) and OCR for scanned PDFs
 - Parse real VCS/Questa URG output (not just synthetic reports)
 - Generate actual SystemVerilog files instead of code sketches
 - Add evaluation harness with ground-truth Q&A pairs
@@ -271,4 +271,4 @@ Targeting Design Verification roles in semiconductor / hardware.
 
 MIT — feel free to use, modify, and learn from.
 
-The AXI4 specification is the property of ARM Limited and is not redistributed in this repo.
+No specifications are redistributed in this repo; bring your own PDFs.
